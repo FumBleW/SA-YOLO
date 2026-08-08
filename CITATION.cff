@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+title: "SA-YOLO: Shape-Aware Product Barcode Detection with Multi-Scale Attention and Strip Convolutions in Complex Retail Scenes"
+message: >-
+  If you use this software in your research, please cite the SA-YOLO manuscript.
+type: software
+authors:
+  - given-names: Bowen
+    family-names: Fang
+    affiliation: Beijing Jiaotong University
+    email: 24711006@bjtu.edu.cn
+repository-code: "https://github.com/FumBleW/SA-YOLO"
+url: "https://github.com/FumBleW/SA-YOLO"
+license: AGPL-3.0
+version: 1.0.0
+date-released: "2026-08-08"
