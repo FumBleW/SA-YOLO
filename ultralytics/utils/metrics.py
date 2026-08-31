@@ -148,11 +148,7 @@ def box_iou(box1: torch.Tensor, box2: torch.Tensor, eps: float = 1e-7) -> torch.
 
 
 def bbox_iou(box1, box2, xywh=True, GIoU=False, DIoU=False, CIoU=False, SIoU=False, EIoU=False, BCIoU=False, eps=1e-7):
-    """
-    计算IoU、GIoU、DIoU、CIoU、SIoU、EIoU、BCIoU（新增）
-    输入box格式：默认xywh（中心坐标+宽高），若xyxy设为False
-    """
-    # 1. 转换box格式为xyxy（左上角+右下角）
+    """Calculate IoU and its GIoU, DIoU, CIoU, SIoU, EIoU, or BC-IoU variants."""
     if xywh:
         (x1, y1, w1, h1), (x2, y2, w2, h2) = box1.chunk(4, -1), box2.chunk(4, -1)
         w1_, h1_, w2_, h2_ = w1 / 2, h1 / 2, w2 / 2, h2 / 2
@@ -164,68 +160,53 @@ def bbox_iou(box1, box2, xywh=True, GIoU=False, DIoU=False, CIoU=False, SIoU=Fal
         w1, h1 = b1_x2 - b1_x1, b1_y2 - b1_y1 + eps
         w2, h2 = b2_x2 - b2_x1, b2_y2 - b2_y1 + eps
 
-    # 2. 计算交集面积
     inter = (b1_x2.minimum(b2_x2) - b1_x1.maximum(b2_x1)).clamp(0) * \
             (b1_y2.minimum(b2_y2) - b1_y1.maximum(b2_y1)).clamp(0)
 
-    # 3. 计算并集面积
     union = w1 * h1 + w2 * h2 - inter + eps
-
-    # 4. 计算基础IoU
     iou = inter / union
 
-    # 5. 计算各类扩展IoU
     if GIoU or DIoU or CIoU or SIoU or EIoU or BCIoU:
-        # 计算最小外接矩形（Convex Hull）
-        cw = b1_x2.maximum(b2_x2) - b1_x1.minimum(b2_x1)  # 外接矩形宽
-        ch = b1_y2.maximum(b2_y2) - b1_y1.minimum(b2_y1)  # 外接矩形高
+        cw = b1_x2.maximum(b2_x2) - b1_x1.minimum(b2_x1)
+        ch = b1_y2.maximum(b2_y2) - b1_y1.minimum(b2_y1)
         if GIoU:
             c_area = cw * ch + eps
             return iou - (c_area - union) / c_area  # GIoU
 
         if DIoU or CIoU or EIoU or BCIoU:
-            # 计算中心距离
-            c2 = cw ** 2 + ch ** 2 + eps  # 外接矩形对角线平方
-            rho2 = ((b2_x1 + b2_x2 - b1_x1 - b1_x2) ** 2 + (b2_y1 + b2_y2 - b1_y1 - b1_y2) ** 2) / 4  # 中心距离平方
+            c2 = cw ** 2 + ch ** 2 + eps
+            rho2 = ((b2_x1 + b2_x2 - b1_x1 - b1_x2) ** 2 + (b2_y1 + b2_y2 - b1_y1 - b1_y2) ** 2) / 4
 
             if DIoU:
                 return iou - rho2 / c2  # DIoU
 
-            # 计算高宽比一致性参数v（CIoU/EIoU/BCIoU共用）
             v = (4 / math.pi ** 2) * torch.pow(torch.atan(w2 / h2) - torch.atan(w1 / h1), 2)
             with torch.no_grad():
-                alpha = v / (v - iou + (1 + eps))  # CIoU的权重系数
+                alpha = v / (v - iou + (1 + eps))
 
             if CIoU:
                 return iou - (rho2 / c2 + v * alpha)  # CIoU
 
             if EIoU:
-                # EIoU：直接惩罚宽高差异
                 w_loss = torch.pow(w1 - w2, 2) / (torch.max(w1, w2) ** 2 + eps)
                 h_loss = torch.pow(h1 - h2, 2) / (torch.max(h1, h2) ** 2 + eps)
                 return iou - (rho2 / c2 + w_loss + h_loss)  # EIoU
 
             if BCIoU:
-                # ============== 【核心】BC-IoU 实现 ==============
-                # 1. 计算边缘重合度惩罚项 L_edge（借鉴EIoU但针对条码优化）
+                # Normalized width and height differences.
                 w_loss = torch.abs(w1 - w2) / (w1 + w2 + eps)
                 h_loss = torch.abs(h1 - h2) / (h1 + h2 + eps)
                 L_edge = w_loss + h_loss
 
-                # 2. 计算高宽比自适应权重 alpha_bc（针对极端高宽比条码提升权重）
-                aspect_ratio = torch.max(w2, h2) / (torch.min(w2, h2) + eps)  # 真实框的高宽比
+                aspect_ratio = torch.max(w2, h2) / (torch.min(w2, h2) + eps)
                 alpha_bc = alpha.clone()
-                # 当真实框高宽比 > 5时，提升高宽比惩罚权重1.5倍
                 mask = aspect_ratio > 5
                 alpha_bc[mask] = alpha_bc[mask] * 1.5
 
-                # 3. 组合BC-IoU损失
-                beta = 0.25  # 边缘重合度惩罚项的权重（可根据实验调整，推荐0.2-0.3）
+                beta = 0.25
                 return iou - (rho2 / c2 + v * alpha_bc + beta * L_edge)
-                # ==================================================
 
         if SIoU:
-            # SIoU实现（略，保留原有逻辑）
             pass
 
     return iou

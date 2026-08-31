@@ -2,146 +2,89 @@ import os
 from pathlib import Path
 
 import cv2
-import numpy as np
+import yaml
 from tqdm import tqdm
 from ultralytics import YOLO
 
-PROJECT_ROOT = Path(__file__).resolve().parent
 
-# ====================== 核心配置（可通过环境变量覆盖） ======================
-# 1. 训练好的模型权重路径（通常是 runs/detect/.../weights/best.pt）
-MODEL_WEIGHTS_PATH = Path(
-    os.getenv(
-        "SA_YOLO_WEIGHTS",
-        PROJECT_ROOT / "runs" / "detect" / "sa_yolo" / "weights" / "best.pt",
-    )
+ROOT = Path(__file__).resolve().parent
+WEIGHTS = Path(
+    os.getenv("SA_YOLO_WEIGHTS", ROOT / "runs" / "detect" / "sa_yolo" / "weights" / "best.pt")
 ).expanduser()
-# 2. 数据集配置文件路径
-DATA_YAML_PATH = Path(
-    os.getenv("SA_YOLO_DATA", PROJECT_ROOT / "datasets" / "kaist_barcode" / "data.yaml")
+DATA_YAML = Path(os.getenv("SA_YOLO_DATA", ROOT / "datasets" / "kaist_barcode" / "data.yaml")).expanduser()
+OUTPUT_DIR = Path(
+    os.getenv("SA_YOLO_TEST_OUTPUT", ROOT / "outputs" / "test_set_evaluation_results")
 ).expanduser()
-# 3. 评估结果保存路径
-SAVE_DIR = Path(
-    os.getenv("SA_YOLO_TEST_OUTPUT", PROJECT_ROOT / "outputs" / "test_set_evaluation_results")
-).expanduser()
-# 4. 可视化参数
-VISUALIZE_SAMPLES = 50  # 可视化保存前50张检测结果图片
-CONF_THRESHOLD = 0.25  # 可视化时的置信度阈值
 
+VISUALIZE_SAMPLES = 50
+CONFIDENCE = 0.25
 
-# ==============================================================================
 
 def main():
-    print("=" * 80)
-    print("开始测试集评估与可视化")
-    print("=" * 80)
+    if not WEIGHTS.is_file():
+        raise FileNotFoundError(f"Model weights not found: {WEIGHTS}\nSet SA_YOLO_WEIGHTS to override this path.")
+    if not DATA_YAML.is_file():
+        raise FileNotFoundError(f"Dataset YAML not found: {DATA_YAML}\nSet SA_YOLO_DATA to override this path.")
 
-    if not MODEL_WEIGHTS_PATH.is_file():
-        raise FileNotFoundError(
-            f"Model weights not found: {MODEL_WEIGHTS_PATH}\n"
-            "Set SA_YOLO_WEIGHTS to the path of your trained .pt file."
-        )
-    if not DATA_YAML_PATH.is_file():
-        raise FileNotFoundError(
-            f"Dataset configuration not found: {DATA_YAML_PATH}\n"
-            "Set SA_YOLO_DATA to the path of your dataset YAML file."
-        )
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    visualization_dir = OUTPUT_DIR / "visualizations"
+    visualization_dir.mkdir(exist_ok=True)
 
-    # 1. 创建保存目录
-    os.makedirs(SAVE_DIR, exist_ok=True)
-    vis_dir = os.path.join(SAVE_DIR, "visualizations")
-    os.makedirs(vis_dir, exist_ok=True)
-
-    # 2. 加载训练好的模型
-    print(f"\n[1/5] 正在加载模型：{MODEL_WEIGHTS_PATH}")
-    model = YOLO(str(MODEL_WEIGHTS_PATH))
-    print("模型加载成功！")
-
-    # 3. 在官方测试集上进行量化评估
-    print("\n[2/5] 正在测试集上进行量化评估...")
+    model = YOLO(str(WEIGHTS))
     metrics = model.val(
-        data=DATA_YAML_PATH,
-        split="test",  # 明确指定在test集评估
+        data=DATA_YAML,
+        split="test",
         imgsz=640,
         batch=32,
-        conf=0.001,  # 高召回率设置
+        conf=0.001,
         iou=0.6,
         device=0,
-        plots=True,  # 自动生成PR曲线、混淆矩阵等
-        save_json=True,  # 保存JSON格式的详细结果
-        project=SAVE_DIR,
-        name="quantitative_eval"
+        plots=True,
+        save_json=True,
+        project=OUTPUT_DIR,
+        name="quantitative_eval",
     )
 
-    # 4. 提取并保存核心性能指标（用于论文写作）
-    print("\n[3/5] 正在提取并保存核心性能指标...")
-    result_text = "=" * 80 + "\n"
-    result_text += "【论文官方测试集最终性能指标】\n"
-    result_text += "=" * 80 + "\n\n"
-    result_text += f"模型权重: {MODEL_WEIGHTS_PATH}\n"
-    result_text += f"数据集: {DATA_YAML_PATH}\n\n"
-
-    # 核心检测指标
-    result_text += "--- 核心检测指标 ---\n"
-    result_text += f"Precision (P): {metrics.box.mp:.4f}\n"
-    result_text += f"Recall (R):    {metrics.box.mr:.4f}\n"
-    result_text += f"mAP50:         {metrics.box.map50:.4f}\n"
-    result_text += f"mAP50-95:      {metrics.box.map:.4f}\n\n"
-
-    # 模型复杂度指标
     model_info = model.info()
-    result_text += "--- 模型复杂度指标 ---\n"
-    result_text += f"参数量 (Params): {model_info[0] / 1e6:.2f} M\n"
-    result_text += f"计算量 (GFLOPs): {model_info[1]:.2f}\n\n"
+    report = (
+        f"Model: {WEIGHTS}\n"
+        f"Dataset: {DATA_YAML}\n\n"
+        f"Precision: {metrics.box.mp:.4f}\n"
+        f"Recall: {metrics.box.mr:.4f}\n"
+        f"mAP50: {metrics.box.map50:.4f}\n"
+        f"mAP50-95: {metrics.box.map:.4f}\n\n"
+        f"Parameters: {model_info[0] / 1e6:.2f} M\n"
+        f"GFLOPs: {model_info[1]:.2f}\n"
+        f"Inference: {metrics.speed['inference']:.2f} ms/image\n"
+    )
+    print(report)
+    (OUTPUT_DIR / "test_set_metrics.txt").write_text(report, encoding="utf-8")
 
-    # 速度指标
-    result_text += "--- 推理速度指标 ---\n"
-    result_text += f"单张图片推理速度: 约 {1000 / metrics.speed['inference']:.1f} FPS\n"
-    result_text += f"  - 预处理: {metrics.speed['preprocess']:.2f} ms\n"
-    result_text += f"  - 推理:   {metrics.speed['inference']:.2f} ms\n"
-    result_text += f"  - 后处理: {metrics.speed['postprocess']:.2f} ms\n"
-    result_text += "=" * 80 + "\n"
+    with DATA_YAML.open("r", encoding="utf-8") as file:
+        data_config = yaml.safe_load(file)
 
-    # 打印并保存指标
-    print(result_text)
-    with open(os.path.join(SAVE_DIR, "test_set_metrics.txt"), "w", encoding="utf-8") as f:
-        f.write(result_text)
-    print(f"核心指标已保存至：{os.path.join(SAVE_DIR, 'test_set_metrics.txt')}")
+    dataset_root = Path(data_config["path"])
+    if not dataset_root.is_absolute():
+        dataset_root = DATA_YAML.parent / dataset_root
+    test_image_dir = dataset_root / data_config["test"]
 
-    # 5. 可视化部分检测结果（用于论文配图）
-    print(f"\n[4/5] 正在可视化保存前{VISUALIZE_SAMPLES}张检测结果...")
+    image_paths = [
+        path for path in test_image_dir.iterdir() if path.suffix.lower() in {".jpg", ".jpeg", ".png"}
+    ][:VISUALIZE_SAMPLES]
 
-    # 获取测试集图片路径
-    import yaml
-    with open(DATA_YAML_PATH, 'r', encoding='utf-8') as f:
-        data_cfg = yaml.safe_load(f)
-    test_img_dir = os.path.join(data_cfg['path'], data_cfg['test'])
-
-    # 遍历并可视化
-    img_list = [f for f in os.listdir(test_img_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))][
-               :VISUALIZE_SAMPLES]
-    for img_name in tqdm(img_list, desc="可视化进度"):
-        img_path = os.path.join(test_img_dir, img_name)
-
-        # 推理
-        results = model.predict(
-            source=img_path,
-            conf=CONF_THRESHOLD,
+    for image_path in tqdm(image_paths, desc="Visualizing"):
+        predictions = model.predict(
+            source=image_path,
+            conf=CONFIDENCE,
             iou=0.6,
             imgsz=640,
             device=0,
-            verbose=False
+            verbose=False,
         )
+        for prediction in predictions:
+            cv2.imwrite(str(visualization_dir / f"det_{image_path.name}"), prediction.plot())
 
-        # 保存检测结果图片
-        for r in results:
-            annotated_img = r.plot()  # 自动绘制检测框
-            save_path = os.path.join(vis_dir, f"det_{img_name}")
-            cv2.imwrite(save_path, annotated_img)
-
-    print(f"\n[5/5] 所有评估任务完成！")
-    print(f"完整结果保存路径：{SAVE_DIR}")
-    print("=" * 80)
+    print(f"Output: {OUTPUT_DIR}")
 
 
 if __name__ == "__main__":

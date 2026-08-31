@@ -1,19 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Barcode Detection Demonstration System
-
-This desktop application demonstrates the improved YOLO11 barcode detector
-described in the accompanying research project.
-
-Main functions:
-1. Load a trained YOLO .pt model.
-2. Upload an image and detect product barcodes.
-3. Display original and annotated images side by side.
-4. Show class, confidence, and bounding-box coordinates.
-5. Optionally attempt barcode decoding with pyzbar/ZBar.
-6. Export annotated images, CSV details, and JSON records.
-7. Run a real-time webcam demonstration.
-"""
+"""Desktop interface for SA-YOLO barcode detection."""
 
 from __future__ import annotations
 
@@ -39,7 +25,7 @@ from ultralytics import YOLO
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-# Path to the trained proposed-model weights.
+# Default checkpoint. A different file can be selected in the interface.
 # You can also choose a weight file from the interface after the program starts.
 DEFAULT_WEIGHTS_PATH = os.getenv(
     "SA_YOLO_WEIGHTS",
@@ -51,14 +37,6 @@ DEFAULT_OUTPUT_DIR = os.getenv(
     "SA_YOLO_APP_OUTPUT",
     str(PROJECT_ROOT / "outputs" / "barcode_detection_app"),
 )
-
-# Final reported test metrics shown in the application dashboard.
-PAPER_METRICS = {
-    "Precision": "94.1%",
-    "Recall": "95.0%",
-    "mAP@0.5": "98.3%",
-    "mAP@0.5:0.95": "61.1%",
-}
 
 # Default inference settings.
 DEFAULT_IMAGE_SIZE = 640
@@ -76,7 +54,7 @@ CAMERA_INFERENCE_INTERVAL = 5  # Run model inference once every N frames.
 # =============================================================================
 
 APP_TITLE = "Barcode Detection Demonstration System"
-MODEL_DESCRIPTION = "Proposed YOLO11: C2f-EMA + MS-SCEM + BC-IoU"
+MODEL_DESCRIPTION = "SA-YOLO: C2f-EMA + MS-SCEM + BC-IoU"
 
 
 class BarcodeDetectionApp(tk.Tk):
@@ -150,18 +128,6 @@ class BarcodeDetectionApp(tk.Tk):
             background="white",
             foreground="#163A5F",
             font=("Segoe UI", 11, "bold"),
-        )
-        style.configure(
-            "MetricName.TLabel",
-            background="white",
-            foreground="#5B6B7A",
-            font=("Segoe UI", 9),
-        )
-        style.configure(
-            "MetricValue.TLabel",
-            background="white",
-            foreground="#0D4D8B",
-            font=("Segoe UI", 16, "bold"),
         )
         style.configure(
             "Primary.TButton",
@@ -318,21 +284,6 @@ class BarcodeDetectionApp(tk.Tk):
             command=self._clear_display,
         ).pack(fill="x", padx=8, pady=(5, 3))
 
-        metric_frame = ttk.LabelFrame(left, text="Reported Test Metrics", style="Card.TLabelframe")
-        metric_frame.pack(fill="x", pady=(0, 10), ipadx=8, ipady=8)
-
-        metric_grid = ttk.Frame(metric_frame)
-        metric_grid.pack(fill="x", padx=8, pady=5)
-
-        for index, (name, value) in enumerate(PAPER_METRICS.items()):
-            cell = ttk.Frame(metric_grid)
-            cell.grid(row=index // 2, column=index % 2, sticky="nsew", padx=6, pady=5)
-            ttk.Label(cell, text=name, style="MetricName.TLabel").pack(anchor="center")
-            ttk.Label(cell, text=value, style="MetricValue.TLabel").pack(anchor="center")
-
-        metric_grid.columnconfigure(0, weight=1)
-        metric_grid.columnconfigure(1, weight=1)
-
     def _build_center_panel(self, parent: ttk.Frame) -> None:
         """Build the image preview panel."""
         center = ttk.Frame(parent)
@@ -453,12 +404,7 @@ class BarcodeDetectionApp(tk.Tk):
             "• Input: product images or webcam frames\n"
             "• Output: barcode class, confidence, and box coordinates\n"
             "• Optional: decode a detected barcode ROI\n"
-            "• Export: annotated image, CSV details, and JSON record\n\n"
-            "Recommended demonstration cases:\n"
-            "1. Text-dense packaging;\n"
-            "2. Small or distant barcodes;\n"
-            "3. Rotated or cylindrical-package barcodes;\n"
-            "4. Reflective or partially occluded barcodes."
+            "• Export: annotated image, CSV details, and JSON record"
         )
 
         ttk.Label(
