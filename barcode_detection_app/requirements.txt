@@ -1,7 +1,7 @@
 # Required packages
 ultralytics>=8.3.0
 opencv-python>=4.8.0
-Pillow>=10.0
+Pillow>=12.3.0
 
 # Optional package for barcode / QR-code decoding.
 # The detection function works normally without it.
