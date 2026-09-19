@@ -65,9 +65,29 @@ Training outputs are written to `runs/detect/sa_yolo`. Evaluation outputs are wr
 
 Results reported in the manuscript on the KAIST 1D Barcode test split (`imgsz=640`):
 
-| Precision | Recall | mAP@0.5 | mAP@0.5:0.95 |
+| Precision (%) | Recall (%) | mAP@0.5 (%) | mAP@0.5:0.95 (%) |
 |---:|---:|---:|---:|
 | 94.1 | 95.0 | 98.3 | 61.1 |
+
+The reported model was initialized from the YAML configuration without pretrained weights. The training settings used by `train.py` are summarized below.
+
+| Setting | Value |
+|---|---:|
+| Epochs | 200 |
+| Batch size | 16 |
+| Input size | 640 × 640 |
+| Optimizer | SGD |
+| Initial learning rate (`lr0`) | 0.001 |
+| Final learning-rate factor (`lrf`) | 0.01 |
+| Warmup epochs | 5 |
+| Momentum | 0.937 |
+| Weight decay | 0.001 |
+| Early-stopping patience | 20 |
+| Loss weights (`box`, `cls`, `dfl`) | 10.0, 0.2, 1.5 |
+
+For reproducibility, training uses `seed=42` with `deterministic=True`. The current script is configured for one CUDA device (`device=0`) and uses `workers=0`.
+
+The augmentation settings are `degrees=180`, `shear=15`, `hsv_h=0.015`, `hsv_s=0.7`, `hsv_v=0.4`, `fliplr=0.5`, `flipud=0.5`, `mosaic=1.0`, and `mixup=0.5`; copy-paste augmentation is disabled. Test-set evaluation uses batch size 16, confidence threshold 0.001, and IoU threshold 0.6.
 
 Model weights are not included in the repository.
 
@@ -82,12 +102,15 @@ python barcode_detection_app/barcode_detection_app.py
 
 Barcode decoding through `pyzbar` is optional and is separate from the detection evaluation.
 
+![Barcode detection desktop demo](assets/barcode_detection_demo.png)
+
 ## Main files
 
 ```text
 train.py                                      training script
 test.py                                       evaluation script
 barcode_detection_app/                       desktop demo
+assets/                                      figures used in this README
 ultralytics/cfg/models/11/                    model configurations
 ultralytics/nn/other_modules/                 custom modules
 ultralytics/utils/metrics.py                  BC-IoU implementation

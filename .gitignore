@@ -276,3 +276,7 @@ credentials.json
 /docker/
 /docs/
 /mkdocs.yml
+
+# Images used by repository documentation
+!/assets/
+!/assets/*.png
