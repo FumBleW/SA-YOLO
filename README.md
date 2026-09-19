@@ -24,7 +24,7 @@ pip install -e . --no-deps
 
 ## Dataset
 
-The experiments use the [KAIST 1D Barcode (DEAL/QuickBrowser) dataset](https://www.resl.kaist.ac.kr/doc/datasets). The dataset is not distributed with this repository.
+The experiments use the [KAIST 1D Barcode (DEAL/QuickBrowser) dataset](https://zenodo.org/records/13586402). The dataset is not distributed with this repository.
 
 By default, the scripts look for:
 
